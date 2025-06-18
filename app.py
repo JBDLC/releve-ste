@@ -11,6 +11,8 @@ import hashlib
 import pickle
 from functools import lru_cache, wraps
 import json
+import gspread
+from google.oauth2.service_account import Credentials
 
 app = Flask(__name__)
 app.secret_key = 'votre_cle_secrete_a_remplacer'  # À personnaliser pour la sécurité
@@ -21,6 +23,11 @@ CACHE_DURATION = 3600  # 1 heure en secondes
 RAPPORTS_JSON = "rapports.json"
 PHOTOS_DIR = "photos_releves"
 RELEVES_JSON = "releves_20.json"
+
+# Paramètres Google Sheets
+SERVICE_ACCOUNT_FILE = r'C:\monprojet\releves-ste-d4d0922bacfa.json'
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+GSHEET_URL = "https://docs.google.com/spreadsheets/d/1dx1TNiG-LVU_DrjNjWkQJStvrFbJPfiwXia2owW40zA/edit"
 
 # Créer les dossiers nécessaires s'ils n'existent pas
 if not os.path.exists(CACHE_DIR):
@@ -129,27 +136,43 @@ def charger_donnees_cached(site, timestamp):
         print(f"Erreur lors du chargement des données pour {site}: {e}")
         return pd.DataFrame(columns=["Date", "Statut"] + sites[site])
 
+def get_gsheet_client():
+    creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+    return gspread.authorize(creds)
+
+def read_gsheet_as_df(sheet_name):
+    gc = get_gsheet_client()
+    sh = gc.open_by_url(GSHEET_URL)
+    worksheet = sh.worksheet(sheet_name)
+    data = worksheet.get_all_values()
+    if not data:
+        return pd.DataFrame()
+    df = pd.DataFrame(data[1:], columns=data[0])
+    return df
+
+def write_df_to_gsheet(df, sheet_name):
+    gc = get_gsheet_client()
+    sh = gc.open_by_url(GSHEET_URL)
+    worksheet = sh.worksheet(sheet_name)
+    # Efface l'onglet avant d'écrire
+    worksheet.clear()
+    # Prépare les données à écrire
+    values = [df.columns.tolist()] + df.values.tolist()
+    worksheet.update('A1', values)
+
 def charger_donnees(site):
-    """Charge les données avec cache intelligent"""
     try:
-        # Utiliser le timestamp de modification du fichier pour invalider le cache
-        if os.path.exists(FICHIER):
-            timestamp = int(os.path.getmtime(FICHIER))
-        else:
-            timestamp = 0
-            print(f"Le fichier {FICHIER} n'existe pas encore")
-            initialiser_fichier()
-            
-        df = charger_donnees_cached(site, timestamp)
-        if df is None or df.empty:
-            print(f"Aucune donnée trouvée pour le site {site}")
-            return pd.DataFrame(columns=["Date", "Statut"] + sites[site])
+        df = read_gsheet_as_df(site)
         return df
-        
     except Exception as e:
-        print(f"Erreur lors du chargement des données pour {site}: {str(e)}")
-        # Retourner un DataFrame vide mais avec les bonnes colonnes
-        return pd.DataFrame(columns=["Date", "Statut"] + sites[site])
+        print(f"Erreur lors de la lecture Google Sheets pour {site}: {e}")
+        return pd.DataFrame()
+
+def sauvegarder_donnees(df_modifie, site):
+    try:
+        write_df_to_gsheet(df_modifie, site)
+    except Exception as e:
+        print(f"Erreur lors de l'écriture Google Sheets pour {site}: {e}")
 
 def nettoyer_cache_expire():
     """Nettoie automatiquement les fichiers de cache expirés"""
@@ -171,27 +194,6 @@ def invalider_cache_site(site):
                     os.remove(file_path)
     except Exception as e:
         print(f"Erreur lors de l'invalidation du cache pour {site}: {e}")
-
-def sauvegarder_donnees(df_modifie, site):
-    dfs = {}
-    if os.path.exists(FICHIER):
-        with pd.ExcelFile(FICHIER, engine="openpyxl") as xls:
-            for sheet in xls.sheet_names:
-                dfs[sheet] = xls.parse(sheet)
-    else:
-        initialiser_fichier()
-        for s in sites:
-            dfs[s] = pd.DataFrame(columns=["Date", "Statut"] + sites[s])
-
-    dfs[site] = df_modifie
-
-    with pd.ExcelWriter(FICHIER, engine="openpyxl", mode="w") as writer:
-        for sheet, data in dfs.items():
-            data.to_excel(writer, sheet_name=sheet, index=False)
-    
-    # Invalider le cache après sauvegarde
-    charger_donnees_cached.cache_clear()
-    invalider_cache_site(site)
 
 def enregistrer_rapport(semaine, annee, site):
     """Enregistre un rapport généré dans un fichier JSON"""
@@ -939,29 +941,20 @@ def telecharger_mesures():
         # Si le fichier n'existe pas, retourner une erreur
         return "Fichier non trouvé", 404
 
-@app.route('/gestion_excel', methods=['GET', 'POST'])
-@require_access(14)
-def gestion_excel():
-    site = request.args.get('site') or list(sites.keys())[0]
-    message = None
-    df = charger_donnees(site)
-    if request.method == 'POST':
-        # Récupérer les données du formulaire et mettre à jour le DataFrame
-        for i in range(len(df)):
-            for col in df.columns:
-                form_key = f"cell_{i}_{col}"
-                if form_key in request.form:
-                    value = request.form[form_key]
-                    # Gestion des types : laisser vide si vide, sinon essayer de caster
-                    if value == '':
-                        df.at[i, col] = ''
-                    else:
-                        df.at[i, col] = value
-        sauvegarder_donnees(df, site)
-        message = "Modifications enregistrées !"
-    # Rafraîchir les données après sauvegarde
-    df = charger_donnees(site)
-    return render_template('gestion_excel.html', sites=list(sites.keys()), site=site, df=df, message=message)
+def test_google_sheets():
+    print(">>> test_google_sheets démarre")
+    SERVICE_ACCOUNT_FILE = r'C:\monprojet\releves-ste-d4d0922bacfa.json'
+    SCOPES = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive']
+    creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+    gc = gspread.authorize(creds)
+    sh = gc.open_by_url("https://docs.google.com/spreadsheets/d/1dx1TNiG-LVU_DrjNjWkQJStvrFbJPfiwXia2owW40zA/edit")
+    worksheet = sh.sheet1
+    data = worksheet.get_all_values()
+    print("Lecture réussie ! Première ligne :", data[0])
+    worksheet.update('A2', [['Test écriture depuis Python !']])
+    print("Écriture réussie !")
+
+test_google_sheets()
 
 if __name__ == "__main__":
     # Nettoyer le cache expiré au démarrage
