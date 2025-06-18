@@ -1,0 +1,172 @@
+{% extends "layout.html" %}
+
+{% block title %}Relevé photo du 20{% endblock %}
+
+{% block extra_head %}
+<style>
+    @media (max-width: 768px) {
+        .form-row-mobile {
+            flex-direction: column !important;
+        }
+        .form-row-mobile > .col-md-4 {
+            width: 100% !important;
+            max-width: 100% !important;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<a href="/" class="btn btn-secondary mb-3 w-100">
+    <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:8px;" fill="#1B2A4F" xmlns="http://www.w3.org/2000/svg">
+        <path d="M3 12L12 4l9 8v7a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v-3h-2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="#1B2A4F"/>
+    </svg>
+    Retour à l'accueil
+</a>
+
+<h2 class="text-center mb-4">Relevé photo du 20</h2>
+
+{% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+{% if just_saved %}
+    <div class="alert alert-success">Relevé photo enregistré avec succès !</div>
+{% endif %}
+
+<form method="post" enctype="multipart/form-data" class="form-pro">
+    <div class="row g-3 justify-content-center form-row-mobile d-flex">
+        <div class="col-md-4 col-12">
+            <div class="mb-3">
+                <label for="site">Site</label>
+                <select name="site" class="form-select" required onchange="updateDebitmetres()">
+                    <option value="">-- Choisir un site --</option>
+                    {% for site in sites %}
+                        <option value="{{ site }}" {% if selected_site == site %}selected{% endif %}>{{ site }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+        <div class="col-md-4 col-12">
+            <div class="mb-3">
+                <label for="mois">Mois</label>
+                <select name="mois" class="form-select" required>
+                    <option value="">-- Choisir un mois --</option>
+                    <option value="1" {% if mois == 1 %}selected{% endif %}>Janvier</option>
+                    <option value="2" {% if mois == 2 %}selected{% endif %}>Février</option>
+                    <option value="3" {% if mois == 3 %}selected{% endif %}>Mars</option>
+                    <option value="4" {% if mois == 4 %}selected{% endif %}>Avril</option>
+                    <option value="5" {% if mois == 5 %}selected{% endif %}>Mai</option>
+                    <option value="6" {% if mois == 6 %}selected{% endif %}>Juin</option>
+                    <option value="7" {% if mois == 7 %}selected{% endif %}>Juillet</option>
+                    <option value="8" {% if mois == 8 %}selected{% endif %}>Août</option>
+                    <option value="9" {% if mois == 9 %}selected{% endif %}>Septembre</option>
+                    <option value="10" {% if mois == 10 %}selected{% endif %}>Octobre</option>
+                    <option value="11" {% if mois == 11 %}selected{% endif %}>Novembre</option>
+                    <option value="12" {% if mois == 12 %}selected{% endif %}>Décembre</option>
+                </select>
+            </div>
+        </div>
+        <div class="col-md-4 col-12">
+            <div class="mb-3">
+                <label for="annee">Année</label>
+                <input type="number" name="annee" class="form-control" required value="{{ annee|default('') }}">
+            </div>
+        </div>
+    </div>
+    
+    <div id="debitmetres_section" style="display: none;">
+        <h4 class="mt-4 text-center">Photos des débitmètres</h4>
+        <div class="row g-3" id="debitmetres_list">
+            <!-- Rempli dynamiquement par JavaScript -->
+        </div>
+        
+        <div class="d-grid gap-2 mt-4">
+            <button type="submit" class="btn-pro btn-pro-primary btn-lg">
+                <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:8px;" fill="white" xmlns="http://www.w3.org/2000/svg">
+                    <rect x="3" y="7" width="18" height="12" rx="2"/>
+                    <circle cx="12" cy="13" r="3" fill="#1B2A4F"/>
+                    <rect x="8" y="4" width="8" height="3" rx="1.5"/>
+                </svg>
+                Enregistrer le relevé
+            </button>
+        </div>
+    </div>
+</form>
+
+{% if releves %}
+    <h3 class="mt-5 text-center">Historique des relevés</h3>
+    <div class="table-responsive">
+        <table class="table table-striped table-bordered">
+            <thead>
+                <tr>
+                    <th>Site</th>
+                    <th>Mois</th>
+                    <th>Année</th>
+                    <th>Date de relevé</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for releve in releves %}
+                <tr>
+                    <td>{{ releve.site }}</td>
+                    <td>{{ releve.mois }}</td>
+                    <td>{{ releve.annee }}</td>
+                    <td>{{ releve.timestamp|replace('T', ' ')|slice(0, 19) }}</td>
+                    <td>
+                        <a href="/voir_photos?site={{ releve.site }}&mois={{ releve.mois }}&annee={{ releve.annee }}" class="btn btn-primary btn-sm">Voir photos</a>
+                        <a href="/supprimer_releve?site={{ releve.site }}&mois={{ releve.mois }}&annee={{ releve.annee }}" class="btn btn-outline-danger btn-sm" onclick="return confirm('Supprimer ce relevé ?');">Supprimer</a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const debitmetres = {{ debitmetres | tojson }};
+    
+    function updateDebitmetres() {
+        const site = document.querySelector('select[name="site"]').value;
+        const section = document.getElementById('debitmetres_section');
+        const list = document.getElementById('debitmetres_list');
+        
+        if (site && debitmetres[site]) {
+            section.style.display = 'block';
+            list.innerHTML = '';
+            
+            debitmetres[site].forEach(debitmetre => {
+                const col = document.createElement('div');
+                col.className = 'col-12 col-md-6 col-lg-4 mb-3';
+                col.innerHTML = `
+                    <div class="card h-100">
+                        <div class="card-body d-flex flex-column align-items-center">
+                            <h6 class="card-title text-center">${debitmetre}</h6>
+                            <div class="w-100 d-flex flex-column gap-2">
+                                <label class="w-100">
+                                    <input type="file" name="photo_${debitmetre.replace(' ', '_')}_file" accept="image/*" style="display:none" onchange="this.nextElementSibling.innerText = this.files[0]?.name || 'Choisir un fichier'">
+                                    <span class="btn btn-outline-primary w-100 mb-1">Choisir un fichier</span>
+                                </label>
+                                <label class="w-100">
+                                    <input type="file" name="photo_${debitmetre.replace(' ', '_')}_camera" accept="image/*" capture="environment" style="display:none" onchange="this.nextElementSibling.innerText = this.files[0]?.name || 'Prendre une photo'">
+                                    <span class="btn btn-outline-success w-100">Prendre une photo</span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                list.appendChild(col);
+            });
+        } else {
+            section.style.display = 'none';
+        }
+    }
+    
+    // Initialiser au chargement de la page
+    updateDebitmetres();
+</script>
+{% endblock %} 

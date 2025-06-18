@@ -1,0 +1,25 @@
+{% extends "layout.html" %}
+
+{% block title %}Rapport de données{% endblock %}
+
+{% block content %}
+<a href="/" class="btn btn-secondary mb-3 w-100">
+    <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:8px;" fill="#1B2A4F" xmlns="http://www.w3.org/2000/svg">
+        <path d="M3 12L12 4l9 8v7a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v-3h-2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="#1B2A4F"/>
+    </svg>
+    Retour à l'accueil
+</a>
+
+<h2 class="text-center mb-4">Rapport de données - Semaine {{ semaine }} / {{ annee }}</h2>
+
+{% if rapports %}
+    {% for bloc in rapports %}
+        <h3 class="text-center my-4">{{ bloc.site }} - {{ bloc.parametre }}</h3>
+        <div class="text-center">
+            <img src="data:image/png;base64,{{ bloc.plot }}" class="img-fluid mb-5">
+        </div>
+    {% endfor %}
+{% else %}
+    <div class="alert alert-warning text-center mt-5">Aucune donnée trouvée pour cette semaine et cette année.</div>
+{% endif %}
+{% endblock %}

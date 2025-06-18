@@ -1,0 +1,18 @@
+{% extends "layout.html" %}
+
+{% block title %}Connexion{% endblock %}
+
+{% set hide_logout = true %}
+
+{% block content %}
+{% if error %}
+    <div class="alert alert-danger text-center">{{ error }}</div>
+{% endif %}
+<form method="post" class="mx-auto" style="max-width: 400px;">
+    <div class="mb-3">
+        <label for="code" class="form-label">Code d'accès</label>
+        <input type="password" class="form-control text-center" id="code" name="code" required autofocus>
+    </div>
+    <button type="submit" class="btn btn-primary w-100">Se connecter</button>
+</form>
+{% endblock %} 

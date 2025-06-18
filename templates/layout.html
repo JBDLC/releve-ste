@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>{% block title %}{% endblock %} - Relevés STE</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
+    <link rel="stylesheet" href="/static/style.css">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    <!-- Goutte d'eau filigrane, très discrète -->
+    <svg class="water-drop-bg" viewBox="0 0 140 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <linearGradient id="dropGradient" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#7AC143"/>
+                <stop offset="100%" stop-color="#1B2A4F"/>
+            </linearGradient>
+        </defs>
+        <path d="M70 0C100 35 140 60 120 100C100 140 40 140 20 100C0 60 40 35 70 0Z" fill="url(#dropGradient)"/>
+    </svg>
+
+    <div class="header-pro">
+        <img src="/static/logo_chantier.png" alt="Logo Chantiers">
+        <h1>Relevés STE</h1>
+        {% if not hide_logout %}
+        <a href="/logout" class="btn btn-outline-secondary">Déconnexion</a>
+        {% endif %}
+    </div>
+
+    <div class="main-center">
+        {% block content %}{% endblock %}
+    </div>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html> 

@@ -1,0 +1,66 @@
+{% extends "layout.html" %}
+
+{% block title %}Saisie de données{% endblock %}
+
+{% block extra_head %}
+<script>
+    function updateDiff(id) {
+        const veille = parseFloat(document.getElementById("veille_" + id).innerText) || 0;
+        const saisie = parseFloat(document.getElementById(id).value) || 0;
+        const diff = saisie - veille;
+        document.getElementById("diff_" + id).innerText = isNaN(diff) ? "" : diff;
+    }
+</script>
+{% endblock %}
+
+{% block content %}
+<a href="/" class="btn btn-secondary mb-3 w-100">
+    <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:8px;" fill="#1B2A4F" xmlns="http://www.w3.org/2000/svg">
+        <path d="M3 12L12 4l9 8v7a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v-3h-2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="#1B2A4F"/>
+    </svg>
+    Retour à l'accueil
+</a>
+
+<h2 class="text-center mb-4">Saisie des mesures pour {{ site }}</h2>
+
+<form method="post">
+    <div class="row fw-bold text-center mb-2">
+        <div class="col-4">Veille</div>
+        <div class="col-4">Saisie</div>
+        <div class="col-4">Différence</div>
+    </div>
+
+    {% for m in mesures %}
+        {% if m == "Coagulant" and not is_monday %}
+            <!-- On saute l'affichage de Coagulant sauf le lundi -->
+        {% else %}
+            <div class="row align-items-center mb-3">
+                <div class="col-4 text-center small" id="veille_{{ m }}">{{ valeurs_veille[m] }}</div>
+                <div class="col-4">
+                    <label class="form-label">{{ m }}</label>
+                    <input type="text" class="form-control text-center" name="{{ m }}" id="{{ m }}" value="{{ valeurs[m]|default('') }}" oninput="updateDiff('{{ m }}')">
+                </div>
+                <div class="col-4 text-center small" id="diff_{{ m }}">{{ valeurs_diff[m] }}</div>
+            </div>
+        {% endif %}
+    {% endfor %}
+
+    <div class="d-grid gap-2">
+        <button type="submit" name="sauvegarder" class="btn btn-primary btn-lg">
+            <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:8px;" fill="white" xmlns="http://www.w3.org/2000/svg">
+                <rect x="3" y="5" width="18" height="14" rx="2"/>
+                <rect x="7" y="3" width="10" height="4" rx="1.5" fill="#1B2A4F"/>
+                <rect x="9" y="13" width="6" height="4" rx="1" fill="#1B2A4F"/>
+            </svg>
+            Sauvegarder
+        </button>
+        <button type="submit" name="finaliser" class="btn btn-success btn-lg">
+            <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:8px;" fill="white" xmlns="http://www.w3.org/2000/svg">
+                    <circle cx="12" cy="12" r="10" fill="white" stroke="#7AC143" stroke-width="2"/>
+                    <path d="M7 13l3 3l7-7" stroke="#7AC143" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Valider définitivement
+            </button>
+        </div>
+    </form>
+{% endblock %}

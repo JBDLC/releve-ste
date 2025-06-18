@@ -1,0 +1,79 @@
+{% extends "layout.html" %}
+
+{% block title %}Rapport de données{% endblock %}
+
+{% block content %}
+<a href="/" class="btn btn-secondary mb-3 w-100">
+    <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:8px;" fill="#1B2A4F" xmlns="http://www.w3.org/2000/svg">
+        <path d="M3 12L12 4l9 8v7a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v-3h-2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="#1B2A4F"/>
+    </svg>
+    Retour à l'accueil
+</a>
+
+<h2 class="text-center mb-4">Générer un rapport</h2>
+
+{% if error %}
+    <div class="alert alert-danger mb-4">{{ error }}</div>
+{% endif %}
+
+<form method="post">
+    <div class="mb-3">
+        <label for="site">Site</label>
+        <select name="site" class="form-select" required>
+            <option value="">-- Choisir un site --</option>
+            {% for site in sites %}
+                <option value="{{ site }}" {% if selected_site == site %}selected{% endif %}>{{ site }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    <div class="mb-3">
+        <label for="semaine">Semaine</label>
+        <input type="number" name="semaine" class="form-control" required value="{{ semaine|default('') }}" min="1" max="53">
+    </div>
+    <div class="mb-3">
+        <label for="annee">Année</label>
+        <input type="number" name="annee" class="form-control" required value="{{ annee|default('') }}" min="2000" max="2100">
+    </div>
+    <button type="submit" class="btn btn-primary w-100">Générer le rapport</button>
+</form>
+
+{% if just_generated %}
+    <div class="alert alert-success mt-4">Rapport généré avec succès !</div>
+{% endif %}
+
+{% if table_rapports %}
+    <h3 class="mt-5">Rapports déjà générés</h3>
+    <table class="table table-striped table-bordered mt-3">
+        <thead>
+            <tr>
+                <th>Année</th>
+                <th>Semaine</th>
+                {% for site in sites %}
+                    <th>{{ site }}</th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for ligne in table_rapports %}
+            <tr>
+                <td>{{ ligne.annee }}</td>
+                <td>{{ ligne.semaine }}</td>
+                {% for site in sites %}
+                    <td>
+                    {% if ligne[site] %}
+                        <div class="btn-group" role="group">
+                            <a href="/rapport?semaine={{ ligne.semaine }}&annee={{ ligne.annee }}&site={{ site }}" class="btn btn-primary btn-sm">Voir</a>
+                            <a href="/rapport_pdf?semaine={{ ligne.semaine }}&annee={{ ligne.annee }}&site={{ site }}" class="btn btn-danger btn-sm">PDF</a>
+                            <a href="/supprimer_rapport?semaine={{ ligne.semaine }}&annee={{ ligne.annee }}&site={{ site }}" class="btn btn-outline-secondary btn-sm" onclick="return confirm('Supprimer ce rapport ?');">Supprimer</a>
+                        </div>
+                    {% else %}
+                        <span class="text-muted">-</span>
+                    {% endif %}
+                    </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endif %}
+{% endblock %}

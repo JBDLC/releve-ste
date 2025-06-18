@@ -1,0 +1,89 @@
+{% extends "layout.html" %}
+
+{% block title %}Visualisation des mesures{% endblock %}
+
+{% block extra_head %}
+<script>
+    const mesures = {{ mesures_par_site | tojson }};
+    function updateParametres() {
+        const site = document.getElementById("site").value;
+        const parametreSelect = document.getElementById("parametre");
+        parametreSelect.innerHTML = "";
+        mesures[site].forEach(param => {
+            const option = document.createElement("option");
+            option.value = param;
+            option.text = param;
+            parametreSelect.add(option);
+        });
+        updateSemaine();
+    }
+
+    function updateSemaine() {
+        const parametre = document.getElementById("parametre").value;
+        const semaineDiv = document.getElementById("semaine_div");
+        const anneeDiv = document.getElementById("annee_div");
+
+        if (parametre === "Coagulant" || parametre === "Eau potable" || parametre === "Floculant") {
+            semaineDiv.style.display = "none";
+            anneeDiv.style.display = "none";
+        } else {
+            semaineDiv.style.display = "block";
+            anneeDiv.style.display = "block";
+        }
+    }
+</script>
+{% endblock %}
+
+{% block content %}
+<a href="/" class="btn btn-secondary mb-3 w-100">
+    <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:8px;" fill="#1B2A4F" xmlns="http://www.w3.org/2000/svg">
+        <path d="M3 12L12 4l9 8v7a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v-3h-2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="#1B2A4F"/>
+    </svg>
+    Retour à l'accueil
+</a>
+
+<h2 class="text-center mb-4">Visualisation des mesures</h2>
+
+<form method="post">
+    <div class="mb-3">
+        <label>Site</label>
+        <select class="form-select" name="site" id="site" onchange="updateParametres()">
+            {% for s in sites %}
+                <option value="{{ s }}">{{ s }}</option>
+            {% endfor %}
+        </select>
+    </div>
+
+    <div class="mb-3">
+        <label>Paramètre</label>
+        <select class="form-select" name="parametre" id="parametre" onchange="updateSemaine()">
+            <!-- rempli dynamiquement -->
+        </select>
+    </div>
+
+    <div class="mb-3" id="semaine_div">
+        <label>Semaine</label>
+        <input type="number" name="semaine" class="form-control">
+    </div>
+
+    <div class="mb-3" id="annee_div">
+        <label>Année</label>
+        <input type="number" name="annee" class="form-control">
+    </div>
+
+    <button type="submit" class="btn btn-primary w-100">Afficher</button>
+</form>
+
+{% if plot_url %}
+    <div class="mt-5 text-center">
+        <h3>Résultat</h3>
+        <img src="data:image/png;base64,{{ plot_url }}" class="img-fluid">
+    </div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    updateParametres();
+</script>
+{% endblock %}

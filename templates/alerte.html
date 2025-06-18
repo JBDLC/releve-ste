@@ -1,0 +1,29 @@
+{% extends "layout.html" %}
+
+{% block title %}Alerte{% endblock %}
+
+{% block content %}
+<a href="/" class="btn btn-secondary mb-3 w-100">
+    <svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:8px;" fill="#1B2A4F" xmlns="http://www.w3.org/2000/svg">
+        <path d="M3 12L12 4l9 8v7a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2v-3h-2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="#1B2A4F"/>
+    </svg>
+    Retour à l'accueil
+</a>
+<div class="form-pro text-center">
+    <h2 class="text-danger mb-4" style="font-size:2.1rem;">
+        <svg aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:8px;" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 3L2 21h20L12 3z" fill="#FFB86B" stroke="#c0392b" stroke-width="2"/>
+            <circle cx="12" cy="16" r="1.2" fill="#c0392b"/>
+            <rect x="11.2" y="9" width="1.6" height="5" rx="0.8" fill="#c0392b"/>
+        </svg>
+        ATTENTION
+    </h2>
+    <p>Un relevé existe déjà aujourd'hui pour <strong>{{ site }}</strong>.</p>
+    <p>Nombre de relevés aujourd'hui : {{ n-1 }}</p>
+    <form method='post' class="d-grid gap-3">
+        <button name='choix' value='nouveau' class='btn-pro btn-pro-success btn-lg'>Faire un relevé supplémentaire (n°{{ n }})</button>
+        <button name='choix' value='modifier' class='btn-pro btn-pro-primary btn-lg'>Modifier la dernière saisie</button>
+        <button name='choix' value='annuler' class='btn-pro btn-pro-warning btn-lg'>Annuler</button>
+    </form>
+</div>
+{% endblock %}
