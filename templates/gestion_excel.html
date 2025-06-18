@@ -1,0 +1,45 @@
+{% extends 'layout.html' %}
+{% block content %}
+<a href="{{ url_for('index') }}" class="btn btn-secondary" style="margin-bottom: 15px;">&larr; Retour à l'accueil</a>
+<h2>Gestion du fichier Excel</h2>
+<form method="get" action="">
+    <label for="site">Choisir le site :</label>
+    <select name="site" id="site" onchange="this.form.submit()">
+        {% for s in sites %}
+            <option value="{{ s }}" {% if s == site %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+    </select>
+</form>
+
+{% if message %}
+    <div style="color: green; margin-top: 10px;">{{ message }}</div>
+{% endif %}
+
+<form method="post" style="margin-top: 20px;">
+    <div style="overflow-x: auto; max-width: 100vw;">
+        <table border="1" style="border-collapse: collapse; min-width: 900px; background: white;">
+            <thead style="background: #f5f5f5;">
+                <tr>
+                    {% for col in df.columns %}
+                        <th style="padding: 8px 12px; white-space: nowrap;">{{ col }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for i in range(df.shape[0]) %}
+                    <tr>
+                        {% for col in df.columns %}
+                            <td style="padding: 4px;">
+                                <input type="text" name="cell_{{ i }}_{{ col }}" value="{{ df.iloc[i][col] if df.iloc[i][col] != 'nan' and df.iloc[i][col] != None else '' }}" style="width: 110px; min-width: 80px; padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; background: #f9f9f9;">
+                            </td>
+                        {% endfor %}
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div style="position: sticky; left: 0; margin-top: 18px;">
+        <button type="submit" class="btn btn-success" style="padding: 8px 24px; font-size: 1.1em;">Enregistrer</button>
+    </div>
+</form>
+{% endblock %} 

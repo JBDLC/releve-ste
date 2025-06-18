@@ -19,6 +19,8 @@ body {
   min-height: 100vh;
   position: relative;
   overflow-x: hidden;
+  font-size: 1rem;
+  padding: 0 0.5rem;
 }
 
 .water-drop-bg {
@@ -36,10 +38,10 @@ body {
 }
 @media (max-width: 600px) {
   .water-drop-bg {
-    width: 98vw;
+    width: 100vw;
     max-width: 100vw;
-    max-height: 70vh;
-    top: 55%;
+    max-height: 60vh;
+    top: 60%;
   }
 }
 body > *:not(.water-drop-bg) {
@@ -49,10 +51,11 @@ body > *:not(.water-drop-bg) {
 
 .header-pro {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 0.8rem 1rem;
+  gap: 0.5rem;
   margin-bottom: 2rem;
-  padding: 1.2rem 2.2rem 1.2rem 2.2rem;
   background: rgba(255,255,255,0.85);
   backdrop-filter: blur(4px);
   box-shadow: 0 2px 16px 0 rgba(27,42,79,0.08);
@@ -60,8 +63,8 @@ body > *:not(.water-drop-bg) {
 }
 
 .header-pro img {
-  height: 44px;
-  max-height: 44px;
+  height: 32px;
+  max-height: 32px;
   width: auto;
   margin-right: 1.2rem;
   margin-left: 0.2rem;
@@ -71,10 +74,11 @@ body > *:not(.water-drop-bg) {
   font-family: 'Montserrat', 'Poppins', Arial, sans-serif;
   color: var(--color-blue);
   font-weight: 700;
-  font-size: 2.2rem;
+  font-size: 1.3rem;
   margin: 0;
   flex: 1;
   white-space: nowrap;
+  text-align: left;
 }
 
 .btn-pro {
@@ -82,11 +86,11 @@ body > *:not(.water-drop-bg) {
   box-shadow: var(--shadow);
   font-family: 'Montserrat', 'Poppins', Arial, sans-serif;
   font-weight: 600;
-  font-size: 1.2rem;
-  padding: 0.9rem 1.5rem;
+  font-size: 1rem;
+  padding: 0.7rem 1rem;
   border: none;
   transition: background 0.2s, color 0.2s, box-shadow 0.2s;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.4rem;
   width: 100%;
 }
 
@@ -127,7 +131,7 @@ body > *:not(.water-drop-bg) {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   border: none;
-  margin-bottom: 1.5rem;
+  margin-bottom: 1rem;
 }
 
 .table-pro th {
@@ -141,8 +145,8 @@ input, select, textarea {
   border-radius: 8px !important;
   border: 1px solid #e0e0e0 !important;
   font-family: 'Open Sans', 'Roboto', Arial, sans-serif;
-  font-size: 1.1rem;
-  padding: 0.7rem 1rem;
+  font-size: 1rem;
+  padding: 0.5rem 0.7rem;
 }
 
 label {
@@ -156,7 +160,8 @@ label {
   color: var(--color-primary);
   border: none;
   border-radius: var(--radius);
-  font-size: 1.1rem;
+  font-size: 1rem;
+  padding: 0.7rem 0.8rem;
 }
 
 .alert-danger {
@@ -164,7 +169,8 @@ label {
   color: #c0392b;
   border: none;
   border-radius: var(--radius);
-  font-size: 1.1rem;
+  font-size: 1rem;
+  padding: 0.7rem 0.8rem;
 }
 
 .alert-warning {
@@ -172,7 +178,8 @@ label {
   color: var(--color-accent);
   border: none;
   border-radius: var(--radius);
-  font-size: 1.1rem;
+  font-size: 1rem;
+  padding: 0.7rem 0.8rem;
 }
 
 ::-webkit-input-placeholder { color: var(--color-text-secondary); }
@@ -184,6 +191,7 @@ h1, h2, h3, h4, h5, h6 {
   font-family: 'Poppins', 'Montserrat', Arial, sans-serif;
   color: var(--color-blue);
   font-weight: 700;
+  font-size: 1.2rem;
 }
 
 .table {
@@ -191,6 +199,8 @@ h1, h2, h3, h4, h5, h6 {
   border-radius: 10px;
   overflow: hidden;
   box-shadow: 0 2px 8px #0001;
+  font-size: 0.95rem;
+  min-width: 600px;
 }
 
 th {
@@ -365,4 +375,80 @@ th {
     margin-right: auto;
     display: block;
   }
+} 
+
+/* Scroll horizontal pour les tableaux sur mobile */
+.table-responsive, .table-pro, .table, table {
+  display: block;
+  overflow-x: auto;
+  width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Bouton sticky en bas sur mobile */
+@media (max-width: 600px) {
+  .btn-pro, button, .btn {
+    font-size: 1.1rem;
+    width: 100%;
+    min-width: 0;
+    padding: 1rem 0.5rem;
+    margin-bottom: 0.7rem;
+  }
+  .header-pro {
+    padding: 0.7rem 0.5rem;
+  }
+  .header-pro h1 {
+    font-size: 1.1rem;
+  }
+  .main-center, .d-grid.gap-3 {
+    gap: 0.5rem !important;
+  }
+  .card-pro, .table-pro {
+    margin-bottom: 0.7rem;
+  }
+  .table, table {
+    font-size: 0.92rem;
+    min-width: 400px;
+  }
+  input, select, textarea {
+    font-size: 0.98rem;
+    padding: 0.45rem 0.5rem;
+  }
+  h1, h2, h3 {
+    font-size: 1.05rem;
+  }
+  .water-drop-bg {
+    width: 100vw;
+    max-width: 100vw;
+    max-height: 60vh;
+    top: 60%;
+  }
+}
+
+/* Pour éviter le débordement horizontal global */
+html, body {
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+/* Amélioration accessibilité boutons */
+.btn-pro, .btn, button {
+  touch-action: manipulation;
+  user-select: none;
+}
+
+/* Correction pour les formulaires et tableaux */
+form {
+  width: 100%;
+  max-width: 100vw;
+}
+
+/* Responsive pour les alertes */
+.alert-success, .alert-danger, .alert-warning {
+  font-size: 1rem;
+  padding: 0.7rem 0.8rem;
+}
+
+.d-grid.gap-3 {
+  gap: 0.7rem !important;
 } 

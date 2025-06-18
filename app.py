@@ -103,10 +103,20 @@ debitmetres_lpz = ["Exhaure 1", "Retour dessableur"]
 debitmetres = {"SMP": debitmetres_smp, "LPZ": debitmetres_lpz}
 
 def initialiser_fichier():
+    """Initialise le fichier Excel avec les colonnes nécessaires"""
     if not os.path.exists(FICHIER):
-        with pd.ExcelWriter(FICHIER) as writer:
-            for site, mesures in sites.items():
-                pd.DataFrame(columns=["Date", "Statut"] + mesures).to_excel(writer, sheet_name=site, index=False)
+        print(f"Création du fichier {FICHIER}")
+        dfs = {}
+        for site, mesures in sites.items():
+            # Créer un DataFrame vide avec les bonnes colonnes
+            columns = ["Date", "Statut"] + mesures
+            dfs[site] = pd.DataFrame(columns=columns)
+        
+        # Sauvegarder dans un nouveau fichier Excel
+        with pd.ExcelWriter(FICHIER, engine='openpyxl') as writer:
+            for site, df in dfs.items():
+                df.to_excel(writer, sheet_name=site, index=False)
+        print(f"Fichier {FICHIER} créé avec succès")
 
 @lru_cache(maxsize=10)
 def charger_donnees_cached(site, timestamp):
@@ -928,6 +938,30 @@ def telecharger_mesures():
     else:
         # Si le fichier n'existe pas, retourner une erreur
         return "Fichier non trouvé", 404
+
+@app.route('/gestion_excel', methods=['GET', 'POST'])
+@require_access(14)
+def gestion_excel():
+    site = request.args.get('site') or list(sites.keys())[0]
+    message = None
+    df = charger_donnees(site)
+    if request.method == 'POST':
+        # Récupérer les données du formulaire et mettre à jour le DataFrame
+        for i in range(len(df)):
+            for col in df.columns:
+                form_key = f"cell_{i}_{col}"
+                if form_key in request.form:
+                    value = request.form[form_key]
+                    # Gestion des types : laisser vide si vide, sinon essayer de caster
+                    if value == '':
+                        df.at[i, col] = ''
+                    else:
+                        df.at[i, col] = value
+        sauvegarder_donnees(df, site)
+        message = "Modifications enregistrées !"
+    # Rafraîchir les données après sauvegarde
+    df = charger_donnees(site)
+    return render_template('gestion_excel.html', sites=list(sites.keys()), site=site, df=df, message=message)
 
 if __name__ == "__main__":
     # Nettoyer le cache expiré au démarrage
