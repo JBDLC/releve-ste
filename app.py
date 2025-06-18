@@ -15,7 +15,7 @@ import json
 app = Flask(__name__)
 app.secret_key = 'votre_cle_secrete_a_remplacer'  # À personnaliser pour la sécurité
 
-FICHIER = "mesures.xlsx"
+FICHIER = "https://vincic.sharepoint.com/sites/TELT-LOT-2/_layouts/15/download.aspx?SourceUrl=/sites/TELT-LOT-2/DEX/04-LOGISTIQUE%20%26%20MATERIEL/STE/APP/Relev%C3%A9s%20STE/mesures.xlsx"  # Lecture seule depuis SharePoint
 CACHE_DIR = "cache"
 CACHE_DURATION = 3600  # 1 heure en secondes
 RAPPORTS_JSON = "rapports.json"
