@@ -1283,11 +1283,12 @@ def gestion_excel():
                          site=site,
                          message=message)
 
-if __name__ == "__main__":
-    # Nettoyer le cache expiré au démarrage
-    nettoyer_cache_expire()
-    
+# Configuration de production
+if __name__ == '__main__':
+    # Désactivation du mode debug
+    app.debug = False
     # Configuration pour la production
-    app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 3600  # Cache statique 1 heure
-    
-    app.run(debug=False, host='0.0.0.0', port=5000)
+    app.config['TEMPLATES_AUTO_RELOAD'] = False
+    app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 31536000  # 1 an en secondes
+    # Lancement du serveur
+    app.run(host='0.0.0.0', port=5000)
