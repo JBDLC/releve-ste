@@ -16,14 +16,16 @@ from reportlab.lib.units import inch
 from reportlab.platypus.frames import Frame
 from reportlab.platypus.doctemplate import PageTemplate
 
-app = Flask(__name__)
-app.secret_key = 'votre_cle_secrete_a_remplacer'  # À personnaliser pour la sécurité
-
 # Configuration de production
-app.debug = False
-app.config['ENV'] = 'production'
-app.config['TEMPLATES_AUTO_RELOAD'] = False
-app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 31536000  # 1 an en secondes
+app = Flask(__name__)
+app.config.update(
+    ENV='production',
+    DEBUG=False,
+    TESTING=False,
+    TEMPLATES_AUTO_RELOAD=False,
+    SEND_FILE_MAX_AGE_DEFAULT=31536000  # 1 an en secondes
+)
+app.secret_key = 'votre_cle_secrete_a_remplacer'  # À personnaliser pour la sécurité
 
 # Définir le chemin absolu du fichier Excel
 FICHIER = os.path.abspath(os.path.join(os.path.dirname(__file__), "mesures.xlsx"))
@@ -1292,5 +1294,5 @@ def gestion_excel():
 if __name__ == '__main__':
     # Nettoyer le cache expiré au démarrage
     nettoyer_cache_expire()
-    # Lancement du serveur
-    app.run(host='0.0.0.0', port=5000)
+    # Lancement du serveur en mode production
+    app.run(host='0.0.0.0', port=5000, debug=False)
