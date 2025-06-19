@@ -5,7 +5,7 @@
     <title>{% block title %}{% endblock %} - Relevés STE</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
     {% block extra_head %}{% endblock %}
 </head>
 <body>
@@ -21,10 +21,10 @@
     </svg>
 
     <div class="header-pro">
-        <img src="/static/logo_chantier.png" alt="Logo Chantiers">
+        <img src="{{ url_for('static', filename='logo_chantier.png') }}" alt="Logo Chantiers">
         <h1>Relevés STE</h1>
-        {% if not hide_logout %}
-        <a href="/logout" class="btn btn-outline-secondary">Déconnexion</a>
+        {% if not hide_logout and session.get('access_code') %}
+        <a href="{{ url_for('logout') }}" class="btn btn-outline-secondary">Déconnexion</a>
         {% endif %}
     </div>
 
@@ -32,6 +32,9 @@
         {% block content %}{% endblock %}
     </div>
 
+    <!-- Bootstrap JS et Font Awesome -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     {% block scripts %}{% endblock %}
 </body>
 </html> 

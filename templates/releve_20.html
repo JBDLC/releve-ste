@@ -52,25 +52,25 @@
                 <label for="mois">Mois</label>
                 <select name="mois" class="form-select" required>
                     <option value="">-- Choisir un mois --</option>
-                    <option value="1" {% if mois == 1 %}selected{% endif %}>Janvier</option>
-                    <option value="2" {% if mois == 2 %}selected{% endif %}>Février</option>
-                    <option value="3" {% if mois == 3 %}selected{% endif %}>Mars</option>
-                    <option value="4" {% if mois == 4 %}selected{% endif %}>Avril</option>
-                    <option value="5" {% if mois == 5 %}selected{% endif %}>Mai</option>
-                    <option value="6" {% if mois == 6 %}selected{% endif %}>Juin</option>
-                    <option value="7" {% if mois == 7 %}selected{% endif %}>Juillet</option>
-                    <option value="8" {% if mois == 8 %}selected{% endif %}>Août</option>
-                    <option value="9" {% if mois == 9 %}selected{% endif %}>Septembre</option>
-                    <option value="10" {% if mois == 10 %}selected{% endif %}>Octobre</option>
-                    <option value="11" {% if mois == 11 %}selected{% endif %}>Novembre</option>
-                    <option value="12" {% if mois == 12 %}selected{% endif %}>Décembre</option>
+                    <option value="1" {% if mois|int == 1 %}selected{% endif %}>Janvier</option>
+                    <option value="2" {% if mois|int == 2 %}selected{% endif %}>Février</option>
+                    <option value="3" {% if mois|int == 3 %}selected{% endif %}>Mars</option>
+                    <option value="4" {% if mois|int == 4 %}selected{% endif %}>Avril</option>
+                    <option value="5" {% if mois|int == 5 %}selected{% endif %}>Mai</option>
+                    <option value="6" {% if mois|int == 6 %}selected{% endif %}>Juin</option>
+                    <option value="7" {% if mois|int == 7 %}selected{% endif %}>Juillet</option>
+                    <option value="8" {% if mois|int == 8 %}selected{% endif %}>Août</option>
+                    <option value="9" {% if mois|int == 9 %}selected{% endif %}>Septembre</option>
+                    <option value="10" {% if mois|int == 10 %}selected{% endif %}>Octobre</option>
+                    <option value="11" {% if mois|int == 11 %}selected{% endif %}>Novembre</option>
+                    <option value="12" {% if mois|int == 12 %}selected{% endif %}>Décembre</option>
                 </select>
             </div>
         </div>
         <div class="col-md-4 col-12">
             <div class="mb-3">
                 <label for="annee">Année</label>
-                <input type="number" name="annee" class="form-control" required value="{{ annee|default('') }}">
+                <input type="number" name="annee" class="form-control" required value="{{ annee }}">
             </div>
         </div>
     </div>
@@ -113,7 +113,7 @@
                     <td>{{ releve.site }}</td>
                     <td>{{ releve.mois }}</td>
                     <td>{{ releve.annee }}</td>
-                    <td>{{ releve.timestamp|replace('T', ' ')|slice(0, 19) }}</td>
+                    <td>{{ releve.timestamp }}</td>
                     <td>
                         <a href="/voir_photos?site={{ releve.site }}&mois={{ releve.mois }}&annee={{ releve.annee }}" class="btn btn-primary btn-sm">Voir photos</a>
                         <a href="/supprimer_releve?site={{ releve.site }}&mois={{ releve.mois }}&annee={{ releve.annee }}" class="btn btn-outline-danger btn-sm" onclick="return confirm('Supprimer ce relevé ?');">Supprimer</a>

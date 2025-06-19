@@ -10,14 +10,7 @@
     Retour au relevé du 20
 </a>
 
-<h2 class="text-center mb-4">
-    <svg aria-hidden="true" width="28" height="28" viewBox="0 0 24 24" style="vertical-align:middle;margin-right:8px;" fill="#1B2A4F" xmlns="http://www.w3.org/2000/svg">
-        <rect x="3" y="7" width="18" height="12" rx="2" fill="#FFB86B"/>
-        <circle cx="12" cy="13" r="3" fill="#1B2A4F"/>
-        <rect x="8" y="4" width="8" height="3" rx="1.5" fill="#1B2A4F"/>
-    </svg>
-    Photos du relevé {{ site }} - {{ mois }}/{{ annee }}
-</h2>
+<h2 class="text-center mb-4">Photos du relevé {{ site }} - {{ mois }}/{{ annee }}</h2>
 
 <div class="row">
     {% for debitmetre, filename in releve.photos.items() %}

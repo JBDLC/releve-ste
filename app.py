@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, send_from_directory, session, send_file
+from flask import Flask, render_template, request, redirect, url_for, send_from_directory, session, send_file, make_response, jsonify
 import pandas as pd
 import os
 import matplotlib
@@ -8,14 +8,21 @@ import io
 import base64
 from datetime import datetime, timedelta
 import hashlib
-import pickle
 from functools import lru_cache, wraps
 import json
+from reportlab.lib.pagesizes import A4
+from reportlab.platypus import SimpleDocTemplate, Image, PageBreak, Spacer, Frame
+from reportlab.lib.units import inch
+from reportlab.platypus.frames import Frame
+from reportlab.platypus.doctemplate import PageTemplate
 
 app = Flask(__name__)
 app.secret_key = 'votre_cle_secrete_a_remplacer'  # À personnaliser pour la sécurité
 
-FICHIER = "mesures.xlsx"
+# Définir le chemin absolu du fichier Excel
+FICHIER = os.path.abspath(os.path.join(os.path.dirname(__file__), "mesures.xlsx"))
+print(f"Chemin du fichier Excel: {FICHIER}")
+
 CACHE_DIR = "cache"
 CACHE_DURATION = 3600  # 1 heure en secondes
 RAPPORTS_JSON = "rapports.json"
@@ -104,19 +111,49 @@ debitmetres = {"SMP": debitmetres_smp, "LPZ": debitmetres_lpz}
 
 def initialiser_fichier():
     """Initialise le fichier Excel avec les colonnes nécessaires"""
-    if not os.path.exists(FICHIER):
-        print(f"Création du fichier {FICHIER}")
-        dfs = {}
-        for site, mesures in sites.items():
-            # Créer un DataFrame vide avec les bonnes colonnes
-            columns = ["Date", "Statut"] + mesures
-            dfs[site] = pd.DataFrame(columns=columns)
+    print(f"Initialisation du fichier {FICHIER}")
+    dfs = {}
+    
+    # Créer un DataFrame pour chaque site avec une ligne exemple
+    for site, mesures in sites.items():
+        # Créer les colonnes
+        columns = ["Date", "Statut"] + mesures
         
-        # Sauvegarder dans un nouveau fichier Excel
-        with pd.ExcelWriter(FICHIER, engine='openpyxl') as writer:
+        # Créer un DataFrame avec une ligne exemple
+        data = {
+            "Date": datetime.now().strftime("%Y-%m-%d"),
+            "Statut": "Validé"
+        }
+        # Ajouter des valeurs d'exemple pour chaque mesure
+        for mesure in mesures:
+            data[mesure] = ""
+            
+        df = pd.DataFrame([data], columns=columns)
+        dfs[site] = df
+    
+    # Sauvegarder dans un nouveau fichier Excel
+    try:
+        # Créer le répertoire parent si nécessaire
+        os.makedirs(os.path.dirname(FICHIER), exist_ok=True)
+        
+        # Sauvegarder le fichier
+        with pd.ExcelWriter(FICHIER, engine='openpyxl', mode='w') as writer:
             for site, df in dfs.items():
                 df.to_excel(writer, sheet_name=site, index=False)
+        
+        # S'assurer que le fichier a les bonnes permissions sous Windows
+        try:
+            import stat
+            # Donner tous les droits à tous les utilisateurs
+            os.chmod(FICHIER, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH | stat.S_IWOTH)
+        except Exception as e:
+            print(f"Attention: impossible de modifier les permissions du fichier: {str(e)}")
+            print("Le fichier a été créé mais pourrait avoir des problèmes de permissions")
+        
         print(f"Fichier {FICHIER} créé avec succès")
+    except Exception as e:
+        print(f"Erreur lors de la création du fichier: {str(e)}")
+        raise
 
 @lru_cache(maxsize=10)
 def charger_donnees_cached(site, timestamp):
@@ -148,7 +185,6 @@ def charger_donnees(site):
         
     except Exception as e:
         print(f"Erreur lors du chargement des données pour {site}: {str(e)}")
-        # Retourner un DataFrame vide mais avec les bonnes colonnes
         return pd.DataFrame(columns=["Date", "Statut"] + sites[site])
 
 def nettoyer_cache_expire():
@@ -173,25 +209,41 @@ def invalider_cache_site(site):
         print(f"Erreur lors de l'invalidation du cache pour {site}: {e}")
 
 def sauvegarder_donnees(df_modifie, site):
-    dfs = {}
-    if os.path.exists(FICHIER):
-        with pd.ExcelFile(FICHIER, engine="openpyxl") as xls:
-            for sheet in xls.sheet_names:
-                dfs[sheet] = xls.parse(sheet)
-    else:
-        initialiser_fichier()
-        for s in sites:
-            dfs[s] = pd.DataFrame(columns=["Date", "Statut"] + sites[s])
+    """Sauvegarde les données dans le fichier Excel"""
+    try:
+        dfs = {}
+        if os.path.exists(FICHIER):
+            with pd.ExcelFile(FICHIER, engine="openpyxl") as xls:
+                for sheet in xls.sheet_names:
+                    dfs[sheet] = xls.parse(sheet)
+        else:
+            initialiser_fichier()
+            for s in sites:
+                dfs[s] = pd.DataFrame(columns=["Date", "Statut"] + sites[s])
 
-    dfs[site] = df_modifie
+        dfs[site] = df_modifie
 
-    with pd.ExcelWriter(FICHIER, engine="openpyxl", mode="w") as writer:
-        for sheet, data in dfs.items():
-            data.to_excel(writer, sheet_name=sheet, index=False)
-    
-    # Invalider le cache après sauvegarde
-    charger_donnees_cached.cache_clear()
-    invalider_cache_site(site)
+        # Sauvegarder le fichier
+        with pd.ExcelWriter(FICHIER, engine="openpyxl", mode="w") as writer:
+            for sheet, data in dfs.items():
+                data.to_excel(writer, sheet_name=sheet, index=False)
+        
+        # S'assurer que le fichier a les bonnes permissions sous Windows
+        try:
+            import stat
+            # Donner tous les droits à tous les utilisateurs
+            os.chmod(FICHIER, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP | stat.S_IROTH | stat.S_IWOTH)
+        except Exception as e:
+            print(f"Attention: impossible de modifier les permissions du fichier: {str(e)}")
+            print("Le fichier a été sauvegardé mais pourrait avoir des problèmes de permissions")
+        
+        # Invalider le cache après sauvegarde
+        charger_donnees_cached.cache_clear()
+        invalider_cache_site(site)
+        
+    except Exception as e:
+        print(f"Erreur lors de la sauvegarde des données: {str(e)}")
+        raise
 
 def enregistrer_rapport(semaine, annee, site):
     """Enregistre un rapport généré dans un fichier JSON"""
@@ -215,43 +267,65 @@ def enregistrer_rapport(semaine, annee, site):
     with open(RAPPORTS_JSON, "w", encoding="utf-8") as f:
         json.dump(rapports, f, ensure_ascii=False, indent=2)
 
-# Page de connexion
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    error = None
-    if request.method == 'POST':
-        code = request.form.get('code')
-        if code in ['12', '13', '14']:
-            session['access_code'] = int(code)
-            return redirect(url_for('index'))
-        else:
-            error = "Code d'accès incorrect."
-    return render_template('login.html', error=error)
-
-@app.route('/logout')
-def logout():
-    session.clear()
-    return redirect(url_for('login'))
-
-# Décorateur pour protéger les routes
-def require_access(min_code):
+def require_access(allowed_codes):
+    """
+    Décorateur pour vérifier les niveaux d'accès.
+    allowed_codes peut être un entier unique ou une liste d'entiers.
+    Le niveau 14 (admin) a accès à tout.
+    """
+    if isinstance(allowed_codes, int):
+        allowed_codes = [allowed_codes]
+        
     def decorator(f):
         @wraps(f)
         def wrapped(*args, **kwargs):
-            if 'access_code' not in session or session['access_code'] < min_code:
+            if 'access_code' not in session:
                 return redirect(url_for('login'))
+            
+            access_code = int(session.get('access_code'))
+            
+            # L'admin (niveau 14) a accès à tout
+            if access_code == 14:
+                return f(*args, **kwargs)
+                
+            # Pour les autres niveaux, vérifier si le code est dans la liste des codes autorisés
+            if access_code not in allowed_codes:
+                return redirect(url_for('login'))
+                
             return f(*args, **kwargs)
         return wrapped
     return decorator
 
-# Protéger les routes selon le niveau d'accès
-@app.route("/")
-@require_access(12)
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        code = request.form.get('code')
+        if code in ['11', '12', '13', '14']:
+            session['access_code'] = int(code)
+            return redirect(url_for('index'))
+        return render_template('login.html', error="Code d'accès incorrect")
+    return render_template('login.html')
+
+@app.route('/logout')
+def logout():
+    session.pop('access_code', None)
+    return redirect(url_for('login'))
+
+# Route par défaut - redirige vers login si pas authentifié
+@app.route('/')
+def root():
+    if 'access_code' not in session:
+        return redirect(url_for('login'))
+    return redirect(url_for('index'))
+
+# Page d'accueil après login
+@app.route("/index")
+@require_access([11, 12, 13, 14])  # Tous les niveaux ont accès à l'index
 def index():
     return render_template("index.html")
 
 @app.route("/saisie/<site>", methods=["GET", "POST"])
-@require_access(12)
+@require_access([12, 13, 14])  # Saisie : niveaux 12, 13 et admin
 def saisie(site):
     mesures = sites[site]
     df = charger_donnees(site)
@@ -308,11 +382,53 @@ def saisie(site):
             idx = brouillon.index[0]
             for k, v in ligne.items():
                 if k in ["Coagulant", "Eau potable"] and today_date.weekday() != 0:
-                    df.loc[idx, k] = ""
+                    # Convertir explicitement en string pour éviter les warnings
+                    df.loc[idx, k] = str("")
                 else:
-                    df.loc[idx, k] = v
+                    # Convertir explicitement le type selon la colonne
+                    if k in ["Date", "Statut"]:
+                        df.loc[idx, k] = str(v)
+                    elif k in parametres_compteurs.get(site, []):
+                        # Pour les compteurs, convertir en float puis en int si possible
+                        try:
+                            if v == "" or v is None:
+                                df.loc[idx, k] = ""
+                            else:
+                                df.loc[idx, k] = float(v)
+                        except (ValueError, TypeError):
+                            df.loc[idx, k] = ""
+                    else:
+                        # Pour les autres paramètres, convertir en float si possible
+                        try:
+                            if v == "" or v is None:
+                                df.loc[idx, k] = ""
+                            else:
+                                df.loc[idx, k] = float(v)
+                        except (ValueError, TypeError):
+                            df.loc[idx, k] = str(v)
         else:
-            df.loc[len(df)] = ligne
+            # Pour une nouvelle ligne, convertir les types avant l'ajout
+            ligne_converted = {}
+            for k, v in ligne.items():
+                if k in ["Date", "Statut"]:
+                    ligne_converted[k] = str(v)
+                elif k in parametres_compteurs.get(site, []):
+                    try:
+                        if v == "" or v is None:
+                            ligne_converted[k] = ""
+                        else:
+                            ligne_converted[k] = float(v)
+                    except (ValueError, TypeError):
+                        ligne_converted[k] = ""
+                else:
+                    try:
+                        if v == "" or v is None:
+                            ligne_converted[k] = ""
+                        else:
+                            ligne_converted[k] = float(v)
+                    except (ValueError, TypeError):
+                        ligne_converted[k] = str(v)
+            df.loc[len(df)] = ligne_converted
 
         if "finaliser" in request.form:
             df.loc[(df["Date"] == today_str) & (df["Statut"] == "Brouillon"), "Statut"] = "Validé"
@@ -340,152 +456,6 @@ def saisie(site):
     is_monday = today_date.weekday() == 0
     return render_template("saisie.html", site=site, mesures=mesures, valeurs=valeurs,
                            valeurs_veille=valeurs_veille, valeurs_diff=valeurs_diff, is_monday=is_monday)
-
-@app.route("/visualisation", methods=["GET", "POST"])
-@require_access(12)
-def visualisation():
-    sites_list = list(sites.keys())
-    mesures_par_site = sites
-    plot_url = None
-
-    if request.method == "POST":
-        site = request.form["site"]
-        parametre = request.form["parametre"]
-        semaine = request.form.get("semaine")
-        annee = request.form.get("annee")
-
-        # Générer une clé de cache unique pour ce graphique
-        cache_key = get_cache_key(site, parametre, semaine, annee, "visualisation")
-        
-        # Vérifier si le graphique est en cache
-        cached_image = load_from_cache(cache_key)
-        if cached_image:
-            plot_url = base64.b64encode(cached_image).decode()
-        else:
-            df = charger_donnees(site)
-            df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-            df = df.dropna(subset=["Date"])
-            df = df[df["Statut"] == "Validé"]
-            df = df.sort_values("Date")
-
-            # Filtrer par année si spécifiée, sinon utiliser l'année courante
-            if annee:
-                df = df[df["Date"].dt.year == int(annee)]
-            else:
-                current_year = datetime.now().year
-                df = df[df["Date"].dt.year == current_year]
-
-            # Filtrer par semaine si spécifiée
-            if semaine and parametre not in ["Coagulant", "Eau potable", "Floculant"]:
-                df["Semaine"] = df["Date"].dt.isocalendar().week
-                df = df[df["Semaine"] == int(semaine)]
-
-            if parametre in ["Coagulant", "Eau potable"]:
-                df = df[df["Date"].dt.weekday == 0]
-                df["Semaine"] = df["Date"].dt.isocalendar().week
-                semaines = df["Semaine"].tolist()
-                valeurs = pd.to_numeric(df[parametre], errors="coerce").fillna(0).tolist()
-                titre = f"{parametre} hebdomadaire ({site})"
-
-                plt.figure(figsize=(10, 5))
-                plt.plot(semaines, valeurs, marker="o")
-                plt.title(titre)
-                plt.xlabel("Semaine")
-                plt.ylabel(parametre)
-                plt.xticks(semaines, ["S" + str(s) for s in semaines])
-                plt.tight_layout()
-
-            elif parametre == "Floculant":
-                df["Semaine"] = df["Date"].dt.isocalendar().week
-                df[parametre] = pd.to_numeric(df[parametre], errors="coerce").fillna(0)
-                df_semaine = df.groupby("Semaine")[parametre].sum().reset_index()
-                semaines = df_semaine["Semaine"].tolist()
-                valeurs = df_semaine[parametre].tolist()
-                titre = f"Consommation hebdomadaire de {parametre} ({site})"
-
-                plt.figure(figsize=(10, 5))
-                plt.plot(semaines, valeurs, marker="o")
-                plt.title(titre)
-                plt.xlabel("Semaine")
-                plt.ylabel("Consommation")
-                plt.xticks(semaines, ["S" + str(s) for s in semaines])
-                plt.tight_layout()
-
-            elif parametre in parametres_compteurs.get(site, []):
-                df[parametre] = pd.to_numeric(df[parametre], errors='coerce').fillna(0)
-                df["Delta"] = df[parametre].diff().fillna(0)
-                dates = df["Date"].dt.date.tolist()
-                valeurs = df["Delta"].tolist()
-                titre = f"Variation journalière de {parametre} - {site}"
-
-                plt.figure(figsize=(10, 5))
-                plt.plot(dates, valeurs, marker="o")
-                plt.title(titre)
-                plt.xticks(rotation=45)
-                plt.tight_layout()
-
-            else:
-                dates = df["Date"].dt.date.tolist()
-                valeurs = pd.to_numeric(df[parametre], errors="coerce").fillna(0).tolist()
-                titre = f"Mesure de {parametre} - {site}"
-
-                plt.figure(figsize=(10, 5))
-                plt.plot(dates, valeurs, marker="o")
-                plt.title(titre)
-                plt.xticks(rotation=45)
-                plt.tight_layout()
-
-            img = io.BytesIO()
-            plt.savefig(img, format="png", dpi=100, bbox_inches='tight')
-            img.seek(0)
-            image_data = img.read()
-            
-            # Sauvegarder en cache
-            save_to_cache(cache_key, image_data)
-            
-            plot_url = base64.b64encode(image_data).decode()
-            plt.close()
-
-    return render_template("visualisation.html", 
-                           sites=sites_list, 
-                           mesures_par_site=mesures_par_site,
-                           plot_url=plot_url)
-
-@app.route("/rapports")
-@require_access(14)
-def rapports_liste():
-    rapports = []
-    if os.path.exists(RAPPORTS_JSON):
-        with open(RAPPORTS_JSON, "r", encoding="utf-8") as f:
-            try:
-                rapports = json.load(f)
-            except Exception:
-                rapports = []
-    # Tri par année, semaine, site
-    rapports = sorted(rapports, key=lambda r: (r["annee"], r["semaine"], r["site"]))
-    return render_template("rapports.html", rapports=rapports)
-
-@app.route("/supprimer_rapport")
-@require_access(14)
-def supprimer_rapport():
-    site = request.args.get("site")
-    semaine = request.args.get("semaine")
-    annee = request.args.get("annee")
-    if not (site and semaine and annee):
-        return redirect(url_for("rapport"))
-    # Charger et filtrer la bibliothèque
-    if os.path.exists(RAPPORTS_JSON):
-        with open(RAPPORTS_JSON, "r", encoding="utf-8") as f:
-            try:
-                rapports = json.load(f)
-            except Exception:
-                rapports = []
-        rapports = [r for r in rapports if not (str(r["site"]) == str(site) and str(r["semaine"]) == str(semaine) and str(r["annee"]) == str(annee))]
-        with open(RAPPORTS_JSON, "w", encoding="utf-8") as f:
-            json.dump(rapports, f, ensure_ascii=False, indent=2)
-    # (Optionnel) supprimer le cache associé
-    # Rediriger vers la page rapport avec le site sélectionné
-    return redirect(url_for("rapport", site=site))
 
 def enregistrer_releve(site, mois, annee, photos_paths):
     """Enregistre un relevé photo dans le fichier JSON"""
@@ -578,10 +548,28 @@ def sauvegarder_photo(photo_file, site, debitmetre, mois, annee):
     return None
 
 @app.route("/releve_20", methods=["GET", "POST"])
-@require_access(13)
+@require_access([11, 13, 14])  # Relevé 20 : niveau 11, 13 et admin
 def releve_20():
+    from datetime import datetime
+    now = datetime.now()
+    annee_courante = now.year
+    mois_courant = now.month
+    
     sites_list = list(debitmetres.keys())
     releves = charger_releves()
+    
+    # Formater les dates pour l'affichage
+    for releve in releves:
+        if "timestamp" in releve:
+            try:
+                # Convertir la chaîne ISO en objet datetime
+                date_obj = datetime.fromisoformat(releve["timestamp"])
+                # Formater la date pour l'affichage
+                releve["timestamp"] = date_obj.strftime("%Y-%m-%d %H:%M:%S")
+            except Exception as e:
+                print(f"Erreur lors du formatage de la date: {e}")
+                releve["timestamp"] = "Date inconnue"
+    
     # Trier par date (plus récent en premier)
     releves = sorted(releves, key=lambda r: (r["annee"], r["mois"]), reverse=True)
     
@@ -592,16 +580,24 @@ def releve_20():
         
         # Traitement des photos uploadées
         photos_paths = {}
+        photos_uploaded = False  # Flag pour vérifier si des photos ont été sélectionnées
+        
         for debitmetre in debitmetres[site]:
             # Vérifier les deux possibilités : fichier ou photo caméra
             photo_key = f"photo_{debitmetre.replace(' ', '_')}"
+            photo_key_file = f"{photo_key}_file"
             photo_key_camera = f"{photo_key}_camera"
             
             photo_file = None
-            if photo_key in request.files:
-                photo_file = request.files[photo_key]
-            elif photo_key_camera in request.files:
+            if photo_key_file in request.files:
+                photo_file = request.files[photo_key_file]
+                if photo_file and photo_file.filename:
+                    photos_uploaded = True
+            
+            if not photos_uploaded and photo_key_camera in request.files:
                 photo_file = request.files[photo_key_camera]
+                if photo_file and photo_file.filename:
+                    photos_uploaded = True
             
             if photo_file and photo_file.filename:
                 print(f"Traitement de la photo pour {debitmetre}: {photo_file.filename}")
@@ -610,7 +606,20 @@ def releve_20():
                     photos_paths[debitmetre] = filename
                     print(f"Photo sauvegardée: {filename}")
         
-        # Enregistrer le relevé
+        # Vérifier si des photos ont été sélectionnées
+        if not photos_uploaded:
+            print("Erreur: Aucune photo n'a été sélectionnée")
+            return render_template("releve_20.html",
+                                 sites=sites_list,
+                                 debitmetres=debitmetres,
+                                 releves=releves,
+                                 selected_site=site,
+                                 mois=mois,
+                                 annee=annee,
+                                 error="Veuillez sélectionner au moins une photo",
+                                 just_saved=False)
+        
+        # Enregistrer le relevé si des photos ont été uploadées avec succès
         if photos_paths:
             print(f"Tentative d'enregistrement du relevé avec {len(photos_paths)} photos")
             success = enregistrer_releve(site, mois, annee, photos_paths)
@@ -618,22 +627,59 @@ def releve_20():
                 print("Relevé enregistré avec succès")
                 # Recharger les relevés après ajout
                 releves = charger_releves()
+                # Formater les dates pour l'affichage
+                for releve in releves:
+                    if "timestamp" in releve:
+                        try:
+                            date_obj = datetime.fromisoformat(releve["timestamp"])
+                            releve["timestamp"] = date_obj.strftime("%Y-%m-%d %H:%M:%S")
+                        except Exception as e:
+                            print(f"Erreur lors du formatage de la date: {e}")
+                            releve["timestamp"] = "Date inconnue"
                 releves = sorted(releves, key=lambda r: (r["annee"], r["mois"]), reverse=True)
-                return render_template("releve_20.html", sites=sites_list, debitmetres=debitmetres, 
-                                     releves=releves, selected_site=site, just_saved=True, mois=mois, annee=annee)
+                return render_template("releve_20.html",
+                                     sites=sites_list,
+                                     debitmetres=debitmetres,
+                                     releves=releves,
+                                     selected_site=site,
+                                     mois=mois,
+                                     annee=annee,
+                                     just_saved=True)
             else:
                 print("Erreur: Un relevé existe déjà")
-                return render_template("releve_20.html", sites=sites_list, debitmetres=debitmetres, 
-                                     releves=releves, error="Un relevé existe déjà pour ce site/mois/année")
+                return render_template("releve_20.html",
+                                     sites=sites_list,
+                                     debitmetres=debitmetres,
+                                     releves=releves,
+                                     error="Un relevé existe déjà pour ce site/mois/année",
+                                     selected_site=site,
+                                     mois=mois,
+                                     annee=annee,
+                                     just_saved=False)
         else:
-            print("Erreur: Aucune photo n'a été uploadée")
-            return render_template("releve_20.html", sites=sites_list, debitmetres=debitmetres, 
-                                 releves=releves, error="Veuillez sélectionner au moins une photo")
+            print("Erreur: Problème lors de l'upload des photos")
+            return render_template("releve_20.html",
+                                 sites=sites_list,
+                                 debitmetres=debitmetres,
+                                 releves=releves,
+                                 error="Une erreur est survenue lors de l'upload des photos",
+                                 selected_site=site,
+                                 mois=mois,
+                                 annee=annee,
+                                 just_saved=False)
     
-    return render_template("releve_20.html", sites=sites_list, debitmetres=debitmetres, releves=releves)
+    return render_template("releve_20.html",
+                         sites=sites_list,
+                         debitmetres=debitmetres,
+                         releves=releves,
+                         selected_site=request.args.get('site'),
+                         mois=request.args.get('mois', mois_courant),  # Utilise le mois courant par défaut
+                         annee=request.args.get('annee', annee_courante),  # Utilise l'année courante par défaut
+                         error=error if 'error' in locals() else None,
+                         just_saved=just_saved if 'just_saved' in locals() else None)
 
 @app.route("/supprimer_releve")
-@require_access(13)
+@require_access([13, 14])  # Gestion photos : niveau 13 et admin
 def supprimer_releve():
     site = request.args.get("site")
     mois = request.args.get("mois")
@@ -683,7 +729,7 @@ def supprimer_releve():
     return redirect(url_for("releve_20"))
 
 @app.route("/voir_photos")
-@require_access(13)
+@require_access([13, 14])  # Gestion photos : niveau 13 et admin
 def voir_photos():
     site = request.args.get("site")
     mois = request.args.get("mois")
@@ -706,8 +752,148 @@ def serve_photo(filename):
     # La fonction send_from_directory gère automatiquement les sous-dossiers avec le type path
     return send_from_directory(PHOTOS_DIR, filename)
 
+@app.route("/visualisation", methods=["GET", "POST"])
+@require_access([11, 13, 14])  # Visualisation : niveaux 11, 13 et admin
+def visualisation():
+    sites_list = list(sites.keys())
+    mesures_par_site = sites
+    plot_url = None
+
+    if request.method == "POST":
+        site = request.form["site"]
+        parametre = request.form["parametre"]
+        semaine = request.form.get("semaine")
+        annee = request.form.get("annee")
+
+        # Générer une clé de cache unique pour ce graphique
+        cache_key = get_cache_key(site, parametre, semaine, annee, "visualisation")
+        
+        # Vérifier si le graphique est en cache
+        cached_image = load_from_cache(cache_key)
+        if cached_image:
+            plot_url = base64.b64encode(cached_image).decode()
+        else:
+            df = charger_donnees(site)
+            df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+            df = df.dropna(subset=["Date"])
+            df = df[df["Statut"] == "Validé"]
+            df = df.sort_values("Date")
+
+            # Ajouter l'année et la semaine ISO
+            if semaine and annee:
+                df["Annee"] = df["Date"].dt.isocalendar().year
+                df["Semaine"] = df["Date"].dt.isocalendar().week
+                df = df[(df["Annee"] == int(annee)) & (df["Semaine"] == int(semaine))]
+
+            if parametre in ["Coagulant", "Eau potable"]:
+                df = df[df["Date"].dt.weekday == 0]
+                df["Semaine"] = df["Date"].dt.isocalendar().week
+                semaines = df["Semaine"].tolist()
+                valeurs = pd.to_numeric(df[parametre], errors="coerce").fillna(0).tolist()
+                titre = f"{parametre} hebdomadaire ({site})"
+
+                plt.figure(figsize=(10, 5))
+                plt.plot(semaines, valeurs, marker="o")
+                plt.title(titre)
+                plt.xlabel("Semaine")
+                plt.ylabel(parametre)
+                plt.xticks(semaines, ["S" + str(s) for s in semaines])
+                plt.tight_layout()
+
+            elif parametre == "Floculant":
+                df["Semaine"] = df["Date"].dt.isocalendar().week
+                df[parametre] = pd.to_numeric(df[parametre], errors="coerce").fillna(0)
+                df_semaine = df.groupby("Semaine")[parametre].sum().reset_index()
+                semaines = df_semaine["Semaine"].tolist()
+                valeurs = df_semaine[parametre].tolist()
+                titre = f"Consommation hebdomadaire de {parametre} ({site})"
+
+                plt.figure(figsize=(10, 5))
+                plt.plot(semaines, valeurs, marker="o")
+                plt.title(titre)
+                plt.xlabel("Semaine")
+                plt.ylabel("Consommation")
+                plt.xticks(semaines, ["S" + str(s) for s in semaines])
+                plt.tight_layout()
+
+            elif parametre in parametres_compteurs.get(site, []):
+                df[parametre] = pd.to_numeric(df[parametre], errors='coerce').fillna(0)
+                df["Delta"] = df[parametre].diff().fillna(0)
+                dates = df["Date"].dt.date.tolist()
+                valeurs = df["Delta"].tolist()
+                titre = f"Variation journalière de {parametre} - {site}"
+
+                plt.figure(figsize=(10, 5))
+                plt.plot(dates, valeurs, marker="o")
+                plt.title(titre)
+                plt.xticks(rotation=45)
+                plt.tight_layout()
+
+            else:
+                dates = df["Date"].dt.date.tolist()
+                valeurs = pd.to_numeric(df[parametre], errors="coerce").fillna(0).tolist()
+                titre = f"Mesure de {parametre} - {site}"
+
+                plt.figure(figsize=(10, 5))
+                plt.plot(dates, valeurs, marker="o")
+                plt.title(titre)
+                plt.xticks(rotation=45)
+                plt.tight_layout()
+
+            img = io.BytesIO()
+            plt.savefig(img, format="png", dpi=100, bbox_inches='tight')
+            img.seek(0)
+            image_data = img.read()
+            
+            # Sauvegarder en cache
+            save_to_cache(cache_key, image_data)
+            
+            plot_url = base64.b64encode(image_data).decode()
+            plt.close()
+
+    return render_template("visualisation.html", 
+                           sites=sites_list, 
+                           mesures_par_site=mesures_par_site,
+                           plot_url=plot_url)
+
+@app.route("/rapports")
+@require_access([14])  # Liste des rapports : admin uniquement
+def rapports_liste():
+    rapports = []
+    if os.path.exists(RAPPORTS_JSON):
+        with open(RAPPORTS_JSON, "r", encoding="utf-8") as f:
+            try:
+                rapports = json.load(f)
+            except Exception:
+                rapports = []
+    # Tri par année, semaine, site
+    rapports = sorted(rapports, key=lambda r: (r["annee"], r["semaine"], r["site"]))
+    return render_template("rapports.html", rapports=rapports)
+
+@app.route("/supprimer_rapport")
+@require_access([14])  # Suppression rapport : admin uniquement
+def supprimer_rapport():
+    site = request.args.get("site")
+    semaine = request.args.get("semaine")
+    annee = request.args.get("annee")
+    if not (site and semaine and annee):
+        return redirect(url_for("rapport"))
+    # Charger et filtrer la bibliothèque
+    if os.path.exists(RAPPORTS_JSON):
+        with open(RAPPORTS_JSON, "r", encoding="utf-8") as f:
+            try:
+                rapports = json.load(f)
+            except Exception:
+                rapports = []
+        rapports = [r for r in rapports if not (str(r["site"]) == str(site) and str(r["semaine"]) == str(semaine) and str(r["annee"]) == str(annee))]
+        with open(RAPPORTS_JSON, "w", encoding="utf-8") as f:
+            json.dump(rapports, f, ensure_ascii=False, indent=2)
+    # (Optionnel) supprimer le cache associé
+    # Rediriger vers la page rapport avec le site sélectionné
+    return redirect(url_for("rapport", site=site))
+
 @app.route("/rapport", methods=["GET", "POST"])
-@require_access(14)
+@require_access([11, 14])  # Rapport : niveau 11 et admin
 def rapport():
     try:
         sites_list = list(sites.keys())
@@ -753,11 +939,24 @@ def rapport():
                 df = charger_donnees(site)
                 
                 if df is not None and not df.empty:
+                    # Nettoyage et filtrage
                     df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
                     df = df[df["Statut"] == "Validé"]
-                    df["Annee"] = df["Date"].dt.year
+                    
+                    # Calculer l'année et la semaine ISO
+                    df["Annee"] = df["Date"].dt.isocalendar().year
                     df["Semaine"] = df["Date"].dt.isocalendar().week
                     
+                    # Filtrer la semaine/année demandée
+                    df_filtered = df[(df["Annee"] == annee) & (df["Semaine"] == semaine)]
+                    
+                    if df_filtered.empty:
+                        print(f"Aucune donnée pour {site} - S{semaine}/{annee}")
+                        return render_template("rapport_resultat.html", rapports=[], semaine=semaine, annee=annee)
+                    
+                    # Trier par date pour avoir les graphiques dans le bon ordre
+                    df_filtered = df_filtered.sort_values("Date")
+
                     for parametre in sites[site]:
                         cache_key = get_cache_key(site, parametre, semaine, annee, "rapport")
                         cached_image = load_from_cache(cache_key)
@@ -765,47 +964,42 @@ def rapport():
                             plot_url = base64.b64encode(cached_image).decode()
                             rapports_result.append({"site": site, "parametre": parametre, "plot": plot_url})
                             continue
-                        
-                        # Si pas en cache, on régénère le graphique
                         img = io.BytesIO()
                         plt.figure(figsize=(8, 4))
-                        
-                        if parametre in ["Coagulant", "Eau potable"]:
-                            df_annuel = df[(df["Date"].dt.year == datetime.now().year) & (df["Date"].dt.weekday == 0)]
-                            df_annuel["Semaine"] = df_annuel["Date"].dt.isocalendar().week
-                            valeurs = pd.to_numeric(df_annuel[parametre], errors="coerce").fillna(0)
-                            semaines = df_annuel["Semaine"]
-                            plt.plot(semaines, valeurs, marker="o")
-                            plt.title(f"{site} - {parametre} (année en cours)")
-                            plt.xlabel("Semaine")
-                            plt.xticks(semaines, ["S" + str(s) for s in semaines])
-                        elif parametre == "Floculant":
-                            df_floc = df[df["Date"].dt.year == datetime.now().year]
-                            df_floc["Semaine"] = df_floc["Date"].dt.isocalendar().week
-                            df_floc[parametre] = pd.to_numeric(df_floc[parametre], errors="coerce").fillna(0)
-                            df_floc = df_floc.groupby("Semaine")[parametre].sum().reset_index()
-                            plt.plot(df_floc["Semaine"], df_floc[parametre], marker="o")
-                            plt.title(f"{site} - Floculant hebdo (année en cours)")
-                            plt.xlabel("Semaine")
-                            plt.xticks(df_floc["Semaine"], ["S" + str(s) for s in df_floc["Semaine"]])
+                        # Cas 1 : Historique annuel pour Eau potable, Coagulant, Floculant
+                        if parametre in ["Eau potable", "Coagulant", "Floculant"]:
+                            df_annuel = df[(df["Annee"] == annee)]
+                            if parametre == "Coagulant" or parametre == "Eau potable":
+                                # Afficher uniquement les valeurs du lundi
+                                df_annuel = df_annuel[df_annuel["Date"].dt.weekday == 0]
+                            df_annuel[parametre] = pd.to_numeric(df_annuel[parametre], errors="coerce").fillna(0)
+                            if not df_annuel.empty:
+                                plt.plot(df_annuel["Semaine"], df_annuel[parametre], marker="o")
+                                plt.title(f"{site} - {parametre} (année {annee})", pad=20)
+                                plt.xlabel("Semaine")
+                                plt.ylabel("Valeur brute")
+                                plt.xticks(df_annuel["Semaine"], ["S" + str(s) for s in df_annuel["Semaine"]], rotation=45)
+                        # Cas 2 : Compteurs (delta)
                         elif parametre in parametres_compteurs[site]:
-                            df_semaine = df[(df["Annee"] == annee) & (df["Semaine"] == semaine)]
-                            valeurs = pd.to_numeric(df_semaine[parametre], errors="coerce").fillna(0).diff().fillna(0)
-                            dates = df_semaine["Date"].dt.date
-                            plt.plot(dates, valeurs, marker="o")
-                            plt.title(f"{site} - Delta {parametre}")
-                            plt.xticks(rotation=45)
-                        elif parametre in parametres_directs[site]:
-                            df_semaine = df[(df["Annee"] == annee) & (df["Semaine"] == semaine)]
-                            valeurs = pd.to_numeric(df_semaine[parametre], errors="coerce").fillna(0)
-                            dates = df_semaine["Date"].dt.date
-                            plt.plot(dates, valeurs, marker="o")
-                            plt.title(f"{site} - {parametre}")
-                            plt.xticks(rotation=45)
+                            df_filtered[parametre] = pd.to_numeric(df_filtered[parametre], errors="coerce")
+                            if not df_filtered.empty:
+                                valeurs = df_filtered[parametre].diff().fillna(0)
+                                dates = df_filtered["Date"].dt.strftime("%d/%m")
+                                plt.plot(dates, valeurs, marker="o")
+                                plt.title(f"{site} - {parametre} (delta S{semaine})", pad=20)
+                                plt.xlabel("Date")
+                                plt.ylabel("Delta journalier")
+                                plt.xticks(rotation=45)
+                        # Cas 3 : Autres paramètres (valeur brute)
                         else:
-                            plt.close()
-                            continue
-                            
+                            df_filtered[parametre] = pd.to_numeric(df_filtered[parametre], errors="coerce")
+                            if not df_filtered.empty:
+                                dates = df_filtered["Date"].dt.strftime("%d/%m")
+                                plt.plot(dates, df_filtered[parametre], marker="o")
+                                plt.title(f"{site} - {parametre} (S{semaine})", pad=20)
+                                plt.xlabel("Date")
+                                plt.ylabel("Valeur brute")
+                                plt.xticks(rotation=45)
                         plt.tight_layout()
                         plt.savefig(img, format="png", dpi=100, bbox_inches='tight')
                         img.seek(0)
@@ -814,123 +1008,200 @@ def rapport():
                         plot_url = base64.b64encode(image_data).decode()
                         plt.close()
                         rapports_result.append({"site": site, "parametre": parametre, "plot": plot_url})
-                
                 return render_template("rapport_resultat.html", rapports=rapports_result, semaine=semaine, annee=annee)
             except Exception as e:
                 print(f"Erreur lors de la génération du rapport GET: {str(e)}")
                 return redirect(url_for("rapport"))
-
         # Génération d'un rapport via POST
         if request.method == "POST":
             try:
                 semaine = int(request.form["semaine"])
                 annee = int(request.form["annee"])
                 site = request.form["site"]
-                
                 if site not in sites:
                     print(f"Site invalide: {site}")
                     return redirect(url_for("rapport"))
-                
-                rapports_result = []
-                df = charger_donnees(site)
-                
-                if df is not None and not df.empty:
-                    df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
-                    df = df[df["Statut"] == "Validé"]
-                    df["Annee"] = df["Date"].dt.year
-                    df["Semaine"] = df["Date"].dt.isocalendar().week
-                    
-                    for parametre in sites[site]:
-                        cache_key = get_cache_key(site, parametre, semaine, annee, "rapport")
-                        cached_image = load_from_cache(cache_key)
-                        if cached_image:
-                            plot_url = base64.b64encode(cached_image).decode()
-                            rapports_result.append({"site": site, "parametre": parametre, "plot": plot_url})
-                            continue
-                        
-                        img = io.BytesIO()
-                        plt.figure(figsize=(8, 4))
-                        
-                        if parametre in ["Coagulant", "Eau potable"]:
-                            df_annuel = df[(df["Date"].dt.year == datetime.now().year) & (df["Date"].dt.weekday == 0)]
-                            df_annuel["Semaine"] = df_annuel["Date"].dt.isocalendar().week
-                            valeurs = pd.to_numeric(df_annuel[parametre], errors="coerce").fillna(0)
-                            semaines = df_annuel["Semaine"]
-                            plt.plot(semaines, valeurs, marker="o")
-                            plt.title(f"{site} - {parametre} (année en cours)")
-                            plt.xlabel("Semaine")
-                            plt.xticks(semaines, ["S" + str(s) for s in semaines])
-                        elif parametre == "Floculant":
-                            df_floc = df[df["Date"].dt.year == datetime.now().year]
-                            df_floc["Semaine"] = df_floc["Date"].dt.isocalendar().week
-                            df_floc[parametre] = pd.to_numeric(df_floc[parametre], errors="coerce").fillna(0)
-                            df_floc = df_floc.groupby("Semaine")[parametre].sum().reset_index()
-                            plt.plot(df_floc["Semaine"], df_floc[parametre], marker="o")
-                            plt.title(f"{site} - Floculant hebdo (année en cours)")
-                            plt.xlabel("Semaine")
-                            plt.xticks(df_floc["Semaine"], ["S" + str(s) for s in df_floc["Semaine"]])
-                        elif parametre in parametres_compteurs[site]:
-                            df_semaine = df[(df["Annee"] == annee) & (df["Semaine"] == semaine)]
-                            valeurs = pd.to_numeric(df_semaine[parametre], errors="coerce").fillna(0).diff().fillna(0)
-                            dates = df_semaine["Date"].dt.date
-                            plt.plot(dates, valeurs, marker="o")
-                            plt.title(f"{site} - Delta {parametre}")
-                            plt.xticks(rotation=45)
-                        elif parametre in parametres_directs[site]:
-                            df_semaine = df[(df["Annee"] == annee) & (df["Semaine"] == semaine)]
-                            valeurs = pd.to_numeric(df_semaine[parametre], errors="coerce").fillna(0)
-                            dates = df_semaine["Date"].dt.date
-                            plt.plot(dates, valeurs, marker="o")
-                            plt.title(f"{site} - {parametre}")
-                            plt.xticks(rotation=45)
-                        else:
-                            plt.close()
-                            continue
-                            
-                        plt.tight_layout()
-                        plt.savefig(img, format="png", dpi=100, bbox_inches='tight')
-                        img.seek(0)
-                        image_data = img.read()
-                        save_to_cache(cache_key, image_data)
-                        plot_url = base64.b64encode(image_data).decode()
-                        plt.close()
-                        rapports_result.append({"site": site, "parametre": parametre, "plot": plot_url})
-                    
-                    enregistrer_rapport(semaine, annee, site)
-                    
-                    # Après génération, recharger la table croisée
-                    if os.path.exists(RAPPORTS_JSON):
-                        with open(RAPPORTS_JSON, "r", encoding="utf-8") as f:
-                            try:
-                                all_rapports = json.load(f)
-                            except Exception:
-                                all_rapports = []
-                        index = set()
-                        for r in all_rapports:
-                            index.add((int(r["annee"]), int(r["semaine"])))
-                        index = sorted(index, reverse=True)
-                        table_rapports = []
-                        for annee_, semaine_ in index:
-                            ligne = {"annee": annee_, "semaine": semaine_}
-                            for site_ in sites_list:
-                                found = next((r for r in all_rapports if int(r["annee"]) == annee_ and int(r["semaine"]) == semaine_ and r["site"] == site_), None)
-                                ligne[site_] = found
-                            table_rapports.append(ligne)
-                
-                return render_template("rapport_form.html", table_rapports=table_rapports, sites=sites_list, just_generated=True, semaine=semaine, annee=annee)
+                enregistrer_rapport(semaine, annee, site)
+                return redirect(url_for("rapport", semaine=semaine, annee=annee, site=site))
             except Exception as e:
                 print(f"Erreur lors de la génération du rapport POST: {str(e)}")
                 return render_template("rapport_form.html", table_rapports=table_rapports, sites=sites_list, error="Une erreur est survenue lors de la génération du rapport.")
-        
-        # Affichage du formulaire par défaut
         return render_template("rapport_form.html", table_rapports=table_rapports, sites=sites_list)
-        
     except Exception as e:
         print(f"Erreur générale dans la route /rapport: {str(e)}")
         return render_template("rapport_form.html", sites=sites_list, error="Une erreur est survenue lors du chargement de la page.")
 
+@app.route("/rapport_pdf")
+@require_access([11, 14])  # Rapport PDF : niveau 11 et admin
+def rapport_pdf():
+    try:
+        semaine = int(request.args.get("semaine"))
+        annee = int(request.args.get("annee"))
+        site = request.args.get("site")
+        
+        if site not in sites:
+            print(f"Site invalide: {site}")
+            return redirect(url_for("rapport"))
+        
+        # Charger les données
+        df = charger_donnees(site)
+        if df is None or df.empty:
+            return "Aucune donnée disponible", 404
+            
+        # Préparer les données pour le PDF
+        df["Date"] = pd.to_datetime(df["Date"], errors="coerce")
+        df = df[df["Statut"] == "Validé"]
+        df["Annee"] = df["Date"].dt.isocalendar().year
+        df["Semaine"] = df["Date"].dt.isocalendar().week
+        
+        # Créer le document PDF
+        buffer = io.BytesIO()
+        
+        # Définir les marges et la taille de page
+        PAGE_HEIGHT = A4[1]
+        PAGE_WIDTH = A4[0]
+        
+        class PDFWithHeader(SimpleDocTemplate):
+            def __init__(self, *args, **kwargs):
+                self.title = kwargs.pop('title', '')  # Extraire le titre des kwargs
+                SimpleDocTemplate.__init__(self, *args, **kwargs)
+                self.header_text = ""
+            
+            def build(self, flowables, **kwargs):
+                self._calc()  # Nécessaire pour avoir les dimensions correctes
+                frame = Frame(
+                    self.leftMargin, self.bottomMargin, 
+                    self.width, self.height,
+                    id='normal'
+                )
+                template = PageTemplate(
+                    'normal',
+                    [frame],
+                    onPage=self.add_header
+                )
+                self.addPageTemplates([template])
+                SimpleDocTemplate.build(self, flowables, **kwargs)
+            
+            def add_header(self, canvas, doc):
+                canvas.saveState()
+                canvas.setFont('Helvetica', 10)
+                # Ajouter le texte d'en-tête en haut à gauche
+                canvas.drawString(doc.leftMargin, PAGE_HEIGHT - 20, f"{site} - S{semaine}/{annee}")
+                canvas.restoreState()
+        
+        # Créer le document avec les métadonnées
+        doc = PDFWithHeader(
+            buffer,
+            pagesize=A4,
+            topMargin=30,
+            title=f"{site}-S{semaine}-{annee}",
+            author="Relevés STE",
+            subject=f"Rapport de données {site} - Semaine {semaine}/{annee}",
+            creator="Relevés STE"
+        )
+        story = []
+        
+        # Préparer les graphiques
+        graphs = []
+        for parametre in sites[site]:
+            # Générer et sauvegarder le graphique
+            plt.figure(figsize=(8, 4))
+            
+            if parametre in ["Coagulant", "Eau potable"]:
+                df_annuel = df[(df["Date"].dt.year == datetime.now().year) & (df["Date"].dt.weekday == 0)]
+                df_annuel["Semaine"] = df_annuel["Date"].dt.isocalendar().week
+                valeurs = pd.to_numeric(df_annuel[parametre], errors="coerce").fillna(0)
+                semaines = df_annuel["Semaine"]
+                plt.plot(semaines, valeurs, marker="o")
+                plt.title(f"{parametre}", pad=20)
+                plt.xlabel("Semaine")
+                plt.xticks(semaines, ["S" + str(s) for s in semaines])
+            elif parametre == "Floculant":
+                df_floc = df[df["Date"].dt.year == datetime.now().year]
+                df_floc["Semaine"] = df_floc["Date"].dt.isocalendar().week
+                df_floc[parametre] = pd.to_numeric(df_floc[parametre], errors="coerce").fillna(0)
+                df_floc = df_floc.groupby("Semaine")[parametre].sum().reset_index()
+                plt.plot(df_floc["Semaine"], df_floc[parametre], marker="o")
+                plt.title(f"{site} - Floculant", pad=20)
+                plt.xlabel("Semaine")
+                plt.xticks(df_floc["Semaine"], ["S" + str(s) for s in df_floc["Semaine"]])
+            elif parametre in parametres_compteurs[site]:
+                df_semaine = df[(df["Annee"] == annee) & (df["Semaine"] == semaine)]
+                valeurs = pd.to_numeric(df_semaine[parametre], errors="coerce").fillna(0).diff().fillna(0)
+                dates = df_semaine["Date"].dt.date
+                plt.plot(dates, valeurs, marker="o")
+                plt.title(f"{site} - {parametre}", pad=20)
+                plt.xticks(rotation=45)
+            elif parametre in parametres_directs[site]:
+                df_semaine = df[(df["Annee"] == annee) & (df["Semaine"] == semaine)]
+                valeurs = pd.to_numeric(df_semaine[parametre], errors="coerce").fillna(0)
+                dates = df_semaine["Date"].dt.date
+                plt.plot(dates, valeurs, marker="o")
+                plt.title(f"{site} - {parametre}", pad=20)
+                plt.xticks(rotation=45)
+            
+            plt.tight_layout()
+            
+            # Sauvegarder le graphique dans un buffer temporaire
+            img_buffer = io.BytesIO()
+            plt.savefig(img_buffer, format='png', dpi=300, bbox_inches='tight')
+            img_buffer.seek(0)
+            
+            # Créer l'image et définir sa taille
+            img = Image(img_buffer)
+            img.drawHeight = 3.2*inch  # Réduire la hauteur pour avoir 3 graphiques par page
+            img.drawWidth = 7*inch
+            
+            graphs.append(img)
+            plt.close()
+        
+        # Calculer le nombre de pages nécessaires
+        nb_graphs = len(graphs)
+        nb_pages = (nb_graphs + 2) // 3  # Arrondi supérieur
+        
+        # Répartir les graphiques sur les pages
+        for page in range(nb_pages):
+            start_idx = page * 3
+            end_idx = min(start_idx + 3, nb_graphs)
+            
+            # Ajouter les graphiques de cette page
+            for i in range(start_idx, end_idx):
+                story.append(graphs[i])
+            
+            # Compléter avec des espaces vides si nécessaire pour maintenir la mise en page
+            for i in range(end_idx - start_idx, 3):
+                story.append(Spacer(1, 3.2*inch))
+            
+            # Ajouter un saut de page sauf pour la dernière page
+            if page < nb_pages - 1:
+                story.append(PageBreak())
+        
+        # Générer le PDF
+        doc.build(story)
+        
+        # Préparer la réponse
+        buffer.seek(0)
+        pdf_content = buffer.getvalue()
+        pdf_title = f"{site}-S{semaine}-{annee}"
+        
+        # Créer une réponse HTML qui inclut le PDF avec le bon titre
+        html_content = f"""
+        <html>
+        <head><title>{pdf_title}</title></head>
+        <body><embed src="data:application/pdf;base64,{base64.b64encode(pdf_content).decode()}" width="100%" height="100%" type="application/pdf"></body>
+        </html>
+        """
+        
+        response = make_response(html_content)
+        response.headers['Content-Type'] = 'text/html'
+        return response
+        
+    except Exception as e:
+        print(f"Erreur lors de la génération du PDF: {str(e)}")
+        return str(e), 500
+
 @app.route('/telecharger_mesures')
-@require_access(14)
+@require_access([11, 14])  # Téléchargement : niveau 11 et admin
 def telecharger_mesures():
     """Télécharge directement le fichier Excel sans créer de copie"""
     if os.path.exists(FICHIER):
@@ -940,28 +1211,77 @@ def telecharger_mesures():
         return "Fichier non trouvé", 404
 
 @app.route('/gestion_excel', methods=['GET', 'POST'])
-@require_access(14)
+@require_access([14])  # Gestion Excel : admin uniquement
 def gestion_excel():
     site = request.args.get('site') or list(sites.keys())[0]
     message = None
-    df = charger_donnees(site)
-    if request.method == 'POST':
-        # Récupérer les données du formulaire et mettre à jour le DataFrame
-        for i in range(len(df)):
-            for col in df.columns:
-                form_key = f"cell_{i}_{col}"
-                if form_key in request.form:
-                    value = request.form[form_key]
-                    # Gestion des types : laisser vide si vide, sinon essayer de caster
-                    if value == '':
-                        df.at[i, col] = ''
-                    else:
-                        df.at[i, col] = value
-        sauvegarder_donnees(df, site)
-        message = "Modifications enregistrées !"
-    # Rafraîchir les données après sauvegarde
-    df = charger_donnees(site)
-    return render_template('gestion_excel.html', sites=list(sites.keys()), site=site, df=df, message=message)
+    
+    try:
+        # S'assurer que le fichier existe et contient les bonnes colonnes
+        if not os.path.exists(FICHIER):
+            initialiser_fichier()
+        
+        # Charger les données
+        df = charger_donnees(site)
+        print(f"\n=== Chargement des données pour {site} ===")
+        
+        if df is None or df.empty:
+            print(f"Aucune donnée trouvée pour {site}, création d'un DataFrame vide")
+            # Créer un DataFrame avec les bonnes colonnes
+            columns = ["Date", "Statut"] + sites[site]
+            df = pd.DataFrame(columns=columns)
+            # Ajouter une ligne exemple
+            df.loc[0] = {
+                "Date": datetime.now().strftime("%Y-%m-%d"),
+                "Statut": "Validé",
+                **{col: "" for col in sites[site]}
+            }
+            # Sauvegarder le DataFrame
+            sauvegarder_donnees(df, site)
+        
+        # Convertir les dates en format string pour l'affichage
+        if 'Date' in df.columns:
+            df['Date'] = pd.to_datetime(df['Date']).dt.strftime('%Y-%m-%d')
+        
+        # Remplacer les valeurs NaN/None par des chaînes vides pour l'affichage
+        df = df.fillna('')
+        
+        print(f"Dimensions du DataFrame: {df.shape}")
+        print("Colonnes:", df.columns.tolist())
+        print("\nPremières lignes:")
+        print(df.head().to_dict('records'))
+
+        if request.method == 'POST':
+            if request.is_json:
+                data = request.get_json()
+                print("\n=== Données reçues du client ===")
+                print(data)
+                
+                # Créer un nouveau DataFrame à partir des données JSON
+                new_df = pd.DataFrame(data['data'], columns=data['headers'])
+                
+                # Convertir la colonne Date en datetime si elle existe
+                if 'Date' in new_df.columns:
+                    new_df['Date'] = pd.to_datetime(new_df['Date'])
+                
+                # Nettoyer les données avant la sauvegarde
+                new_df = new_df.replace('', pd.NA)
+                
+                sauvegarder_donnees(new_df, site)
+                return jsonify({'success': True})
+
+    except Exception as e:
+        print(f"\n=== ERREUR ===\n{str(e)}")
+        if request.is_json:
+            return jsonify({'success': False, 'error': str(e)})
+        message = f"Erreur : {str(e)}"
+        df = pd.DataFrame(columns=["Date", "Statut"] + sites[site])
+
+    return render_template('gestion_excel.html', 
+                         df=df,
+                         sites=sites.keys(),
+                         site=site,
+                         message=message)
 
 if __name__ == "__main__":
     # Nettoyer le cache expiré au démarrage
@@ -970,4 +1290,4 @@ if __name__ == "__main__":
     # Configuration pour la production
     app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 3600  # Cache statique 1 heure
     
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=False, host='0.0.0.0', port=5000)

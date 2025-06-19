@@ -31,7 +31,7 @@
             <td>{{ r.timestamp|replace('T', ' ')|slice(0, 19) }}</td>
             <td>
                 <a href="/rapport?semaine={{ r.semaine }}&annee={{ r.annee }}&site={{ r.site }}" class="btn btn-primary btn-sm">Voir</a>
-                <a href="/rapport_pdf?semaine={{ r.semaine }}&annee={{ r.annee }}&site={{ r.site }}" class="btn btn-danger btn-sm">PDF</a>
+                <a href="/rapport_pdf?semaine={{ r.semaine }}&annee={{ r.annee }}&site={{ r.site }}" class="btn btn-danger btn-sm" target="_blank">PDF</a>
             </td>
         </tr>
         {% endfor %}

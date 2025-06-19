@@ -63,7 +63,7 @@
                     {% if ligne[site] %}
                         <div class="btn-group" role="group">
                             <a href="/rapport?semaine={{ ligne.semaine }}&annee={{ ligne.annee }}&site={{ site }}" class="btn btn-primary btn-sm">Voir</a>
-                            <a href="/rapport_pdf?semaine={{ ligne.semaine }}&annee={{ ligne.annee }}&site={{ site }}" class="btn btn-danger btn-sm">PDF</a>
+                            <a href="/rapport_pdf?semaine={{ ligne.semaine }}&annee={{ ligne.annee }}&site={{ site }}" class="btn btn-danger btn-sm" target="_blank">PDF</a>
                             <a href="/supprimer_rapport?semaine={{ ligne.semaine }}&annee={{ ligne.annee }}&site={{ site }}" class="btn btn-outline-secondary btn-sm" onclick="return confirm('Supprimer ce rapport ?');">Supprimer</a>
                         </div>
                     {% else %}
